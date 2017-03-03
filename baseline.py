@@ -13,6 +13,10 @@ from glove import *
 from cnn import *
 from model import Model
 
+
+max_ques_length = 24
+ques_embed_size = 50
+img_embed_size = 50
 class SimpleDataIterator():
     def __init__(self, df):
         self.df = df
@@ -41,57 +45,57 @@ class PaddedDataIterator(SimpleDataIterator):
         for i, x_i in enumerate(x):
             x_i[:res['length'].values[i]] = res['as_numbers'].values[i]
 
-        return x, res['answer_as_number'], res['length']
+        return x, res['image_as_number'], res['answer_as_number'], res['length']
 
 vocab = []
 
-def build_graph(vocab_size = len(vocab), state_size = 64, batch_size = 256, num_classes = 6):
+def build_graph(batch_size = 256, num_classes=len(vocab)):`    #num_classes should be equal to len(vocab)
 
     # reset_graph()
 
     # Placeholders
     ques_placeholder = tf.placeholder(tf.float32, [batch_size, None]) # [batch_size, num_steps]
-    ques_seqlen = tf.placeholder(tf.int32, [batch_size])
+    ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
     img_placeholder = tf.placeholder(tf.float32, [batch_size, None])
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
     keep_prob = tf.constant(1.0)
 
     # Embedding layer
     word_embeddings = tf.Variable(wordEmbeddings)
-    rnn_word_inputs = tf.reshape(tf.nn.embedding_lookup(word_embeddings, ques_placeholder), [tf.shape(ques_placeholder)[0], self.max_length, self.config.n_features*self.config.embed_size])
+    rnn_word_inputs = tf.reshape(tf.nn.embedding_lookup(word_embeddings, ques_placeholder), [tf.shape(ques_placeholder)[0], max_ques_length, ques_embed_size])
     img_embeddings =  tf.Variable(imgEmbeddings)
-    rnn_img_inputs = tf.reshape(tf.nn.embedding_lookup(img_embeddings, img_placeholder), [tf.shape(img_placeholder)[0], self.max_length, self.config.n_features*self.config.embed_size])
+    rnn_img_inputs = tf.reshape(tf.nn.embedding_lookup(img_embeddings, img_placeholder), [tf.shape(img_placeholder)[0], img_embed_size])
 
     # RNN
-    cell = tf.nn.rnn_cell.GRUCell(state_size)
-    init_state = tf.get_variable('init_state', [1, state_size], initializer=tf.constant_initializer(0.0))
+    cell = tf.nn.rnn_cell.GRUCell(ques_embed_size)
+    init_state = tf.get_variable('init_state', [1, ques_embed_size], initializer=tf.constant_initializer(0.0))
     init_state = tf.tile(init_state, [batch_size, 1])
-    rnn_outputs, final_state = tf.nn.dynamic_rnn(cell, rnn_word_inputs, sequence_length=seqlen, initial_state=init_state)
+    rnn_outputs, final_state = tf.nn.dynamic_rnn(cell, rnn_word_inputs, sequence_length=ques_seqlen_placeholder, initial_state=init_state)
 
     # Add dropout, as the model otherwise quickly overfits
     rnn_outputs = tf.nn.dropout(rnn_outputs, keep_prob)
-
     last_rnn_output = tf.gather_nd(rnn_outputs, tf.pack([tf.range(batch_size), seqlen-1], axis=1))
     # idx = tf.range(batch_size)*tf.shape(rnn_outputs)[1] + (seqlen - 1)
     # last_rnn_output = tf.gather(tf.reshape(rnn_outputs, [-1, state_size]), idx)
 
     # Softmax layer
     with tf.variable_scope('softmax'):
-        W_w = tf.get_variable('W_w', [state_size, num_classes])
-        W_i = tf.get_variable('W_i', [state_size, num_classes])
+        W_ques = tf.get_variable('W_ques', [ques_embed_size, num_classes])
+        W_img = tf.get_variable('W_img', [img_embed_size, num_classes])
         b = tf.get_variable('b', [num_classes], initializer=tf.constant_initializer(0.0))
-    logits = tf.matmul(last_rnn_output, W_w) tf.matmul(img_placeholder, W_i)+ b
+    logits = tf.matmul(last_rnn_output, W_ques) tf.matmul(img_placeholder, W_img)+ b
     preds = tf.nn.softmax(logits)
-    correct = tf.equal(tf.cast(tf.argmax(preds,1),tf.int32), y)
+    correct = tf.equal(tf.cast(tf.argmax(preds,1),tf.int32), ans_placeholder)
     accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, y))
     train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
     return {
-        'x': x,
-        'seqlen': seqlen,
-        'y': y,
+        'ques_placeholder': ques_placeholder,
+        'ques_seqlen_placeholder': ques_seqlen_placeholder,
+        'img_placeholder': img_placeholder,
+        'ans_placeholder': ans_placeholder,
         'dropout': keep_prob,
         'loss': loss,
         'ts': train_step,
@@ -137,9 +141,9 @@ def build_graph(vocab_size = len(vocab), state_size = 64, batch_size = 256, num_
 
 ########Read the data and create the data frame########
 
-file_name = "data/data.pkl"
-vocab_mapping = "data/vocab.pkl"
-img_mapping = "data/img.pkl"
+file_name = "../data/data.pkl"
+vocab_mapping = "../data/vocab.pkl"
+img_mapping = "../data/img.pkl"
 if(os.path.exists(file_name)):
 	data_df = pd.read_pickle(file_name)
 	words_df = pd.read_pickle(vocab_mapping)
@@ -157,7 +161,9 @@ else:
 	img_vocab = {}
 	word_count = 0
 	img_count = 0
-	np_data = np.array([['Index','image_id','question', 'as_numbers', 'length', 'answer', 'answer_as_number']])
+    vocab["UNK"] = word_count
+    word_count += 1
+	np_data = np.array([['Index','image_id', 'image_as_number', 'question', 'as_numbers', 'length', 'answer', 'answer_as_number']])
 	for indx in range(len(data)):
 		img_iter = data[indx]
 		img = str(img_iter["image_id"])
@@ -178,7 +184,7 @@ else:
 					vocab[answer] = word_count
 					word_count += 1
 				ques_numbers = [vocab[word] for word in ques_string]
-				np_data = np.append(np_data, [["Row"+str(num_single_word_ans), img_iter, ques["question"], ques_numbers, len(ques_string), answer, vocab[answer]]], axis=0)
+				np_data = np.append(np_data, [["Row"+str(num_single_word_ans), img, img_vocab[img], ques["question"], ques_numbers, len(ques_string), answer, vocab[answer]]], axis=0)
 				if(np_data.shape[0]%10000 == 0):
 					print np_data.shape
 		if(np_data.shape[0]>10000):
@@ -190,8 +196,10 @@ else:
 
 print data_df.shape
 
-# g = build_graph()
-# tr_losses, te_losses = train_graph(g)
+
 wordEmbeddings = loadWordVectors(vocab)
 # imgEmbeddings = loadImgVectors(img_vocab)
+
+# g = build_graph()
+# tr_losses, te_losses = train_graph(g)
 
