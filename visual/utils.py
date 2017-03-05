@@ -24,7 +24,6 @@ def load_image(path):
     resized_img = skimage.transform.resize(crop_img, (224, 224))
     return resized_img
 
-
 # returns the top1 string
 def print_prob(prob, file_path):
     synset = [l.strip() for l in open(file_path).readlines()]
