@@ -1,6 +1,6 @@
 import numpy as np
 
-DEFAULT_FILE_PATH = "../data/cnn.txt"
+DEFAULT_FILE_PATH = "../data_VisualQA/cnn.txt"
 
 def loadImgVectors(tokens, filepath=DEFAULT_FILE_PATH, dimensions=50):
     """Read pretrained CNN vectors"""
