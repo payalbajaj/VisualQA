@@ -69,10 +69,20 @@ else:
 	vocab["UNK"] = word_count
 	word_count += 1
 	img_count = 0
+	###Read images for which embeddings are present and create data frame only for those images####
+	img_set = set()
+	f = open("cnn.txt", "r")
+	for line in f:
+		img_id = line.split(" ")[0]
+		img_set.add(img_id)
+	f.close()
 	np_data = [('image_id', 'image_as_number', 'question', 'as_numbers', 'length', 'answer', 'answer_as_number')]
 	for indx in range(len(data)):
 		img_iter = data[indx]
 		img = str(img_iter["id"])
+		###Read images for which embeddings are present and create data frame only for those images####
+		if(img not in img_set):
+			continue
 		if(img not in img_vocab):
 			img_vocab[img] = img_count
 			img_count += 1
@@ -91,7 +101,7 @@ else:
 					word_count += 1
 				ques_numbers = [vocab[word] for word in ques_string]
 				np_data.append((img, img_vocab[img], ques["question"], ques_numbers, len(ques_string), answer, vocab[answer]))
-				if(len(np_data)%10000 == 0):
+				if(len(np_data)%100 == 0):
 					print len(np_data)
 	data_df = pd.DataFrame(data=np_data[1:], columns=list(np_data[0]))
 	data_df.to_pickle(file_name)
@@ -107,7 +117,7 @@ imgEmbeddings = loadImgVectors(img_vocab)
 #########Building the Baseline Graph############
 
 ques_embed_size = 50    #golve vectors are 50 dimensional
-img_embed_size = 50 #replace this by size of image embeddings
+img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size     #can be changed
 batch_size = 100
 
