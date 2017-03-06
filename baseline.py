@@ -147,7 +147,10 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     # rnn_img_inputs = tf.reshape(tf.nn.embedding_lookup(img_embeddings, img_placeholder), [tf.shape(img_placeholder)[0], img_embed_size])
 
     # RNN
-    cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
+    # tf 1.0
+    cell = tf.contrib.rnn.GRUCell(ques_embed_size, hidden_state_size)
+    # tf < 1.0
+    #cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
     init_state = tf.get_variable('init_state', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     init_state = tf.tile(init_state, [batch_size, 1])
     rnn_outputs, final_state = tf.nn.dynamic_rnn(cell, rnn_word_inputs, sequence_length=ques_seqlen_placeholder, initial_state=init_state, dtype=tf.float32)
@@ -169,7 +172,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     correct = tf.equal(tf.cast(tf.argmax(preds,1),tf.int32), ans_placeholder)
     accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
-    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits, ans_placeholder))
+    loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=ans_placeholder))
     train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
     return {
