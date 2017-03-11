@@ -25,7 +25,7 @@ def imageget(startind, endind):
 		if len(im.shape) != 3:
 			fi.write(filen + '\n')
 			continue
-		imgs.append(im.reshape((224, 224, 3)))
+		imgs.append(im.reshape((448, 448, 3)))
 	imgsnp = np.array(imgs)
 	return imgsnp
 
@@ -35,7 +35,7 @@ with tf.Session() as sess:
     for step in xrange(size / BATCH_SIZE):
       offset = step * BATCH_SIZE
       batch_data = imageget(offset,offset + BATCH_SIZE)
-      images = tf.placeholder("float", [BATCH_SIZE, 224, 224, 3])
+      images = tf.placeholder("float", [BATCH_SIZE, 448, 448, 3])
       feed_dict = {images: batch_data}
       vgg = vgg19.Vgg19()
       with tf.name_scope("content_vgg"):
