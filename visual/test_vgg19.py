@@ -16,25 +16,26 @@ def print_visembed(nameimg, sumsecond, f):
 	strtoadd = nameimg + " " + " ".join([str(i) for i in sumsecond]) + "\n"
 	f.write(strtoadd)  # python will convert \n to os.linesep
 
-
-imgs = []
-f = open('./notused.txt', 'w')
-for i, filen in enumerate(filenames):
+fi = open('./notused.txt', 'w')
+	
+def imageget(startind, endind):
+	imgs = []
+	for i, filen in enumerate(filenames[startind:endind]):
 		im = utils.load_image("/home/alisha/VG_100K/" + filen + ".jpg")
 		if len(im.shape) != 3:
-			f.write(filen + '\n')
+			fi.write(filen + '\n')
 			continue
 		imgs.append(im.reshape((224, 224, 3)))
-f.close()
+	imgsnp = np.array(imgs)
+	return imgsnp
 
-imgsnp = np.array(imgs)
 f = open('../cnn.txt', 'w')
 with tf.Session() as sess:
-    size = len(imgs)
+    size = len(filenames)
     for step in xrange(size / BATCH_SIZE):
       offset = step * BATCH_SIZE
-      batch_data = imgsnp[offset:(offset + BATCH_SIZE), :, :, :]
-      images = tf.placeholder("float", [50, 224, 224, 3])
+      batch_data = imageget(offset,offset + BATCH_SIZE)
+      images = tf.placeholder("float", [BATCH_SIZE, 224, 224, 3])
       feed_dict = {images: batch_data}
       vgg = vgg19.Vgg19()
       with tf.name_scope("content_vgg"):
@@ -42,6 +43,7 @@ with tf.Session() as sess:
       output = sess.run(vgg.output, feed_dict=feed_dict)
       for ind, out in enumerate(output):
 	npyout = np.array(out)
-	sumit = np.sum(np.sum(npyout, axis = 0), axis = 0)
+	sumit = np.concatenate(npyout[:])
 	print_visembed(filenames[offset+ind], sumit, f)
 f.close()
+fi.close()
