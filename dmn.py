@@ -172,21 +172,19 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     #Forward
     with tf.variable_scope('forward'):
 	    # cell_img_fwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
-	    cell_img_fwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
-	    # img_init_state_fwd = tf.get_variable('img_init_state_fwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
-	    # img_init_state_fwd = tf.tile(img_init_state_fwd, [batch_size, 1])
+	    cell_img_fwd = tf.nn.rnn_cell.wordGRUCell(hidden_state_size, hidden_state_size)
 	    img_init_state_fwd = rnn_img_mapped[:, 0, :]
 	    img_init_state_fwd = tf.multiply(img_init_state_fwd, tf.zeros([batch_size, hidden_state_size]))
-	    img_init_state_fwd = tf.pack([img_init_state_fwd, img_init_state_fwd])
-	    fwd_hidden_memory_states = tf.scan(cell_img_fwd, tf.transpose(tf.transpose(rnn_img_mapped, perm=[2,0,1])), initializer=img_init_state_fwd, name="states")
+	    fwd_hidden_memory_states = tf.scan(cell_img_fwd, tf.transpose(tf.transpose(rnn_img_mapped, perm=[2,0,1])), initializer=img_init_state_fwd, name="fwd_states")
     
     #Backward
+    rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [False, True, False])
     with tf.variable_scope('backward'):
     	# cell_img_bwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
     	cell_img_bwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
     	img_init_state_bwd = tf.get_variable('img_init_state_bwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     	img_init_state_bwd = tf.tile(img_init_state_bwd, [batch_size, 1])
-    	bwd_hidden_states = tf.scan(cell_img_bwd, tf.transpose(rnn_img_mapped, [1,0,2]), initializer=img_init_state_bwd)
+    	bwd_hidden_states = tf.scan(cell_img_bwd, tf.transpose(tf.transpose(rnn_img_mapped_rev, [2,0,1])), initializer=img_init_state_bwd, name="bwd_states")
     
 
     # o_fwd, o_bwd = tf.nn.bidirectional_rnn(cell_img_fwd, cell_img_bwd, tf.transpose(rnn_img_mapped, [1,0,2]),  initial_state_fw=img_init_state_fwd, initial_state_bw=img_init_state_bwd)
