@@ -71,10 +71,11 @@ else:
 	img_count = 0
 	###Read images for which embeddings are present and create data frame only for those images####
 	img_set = set()
-	f = open("cnn.txt", "r")
+	f = open("../data_VisualQA/cnn.txt", "r")
 	for line in f:
 		img_id = line.split(" ")[0]
 		img_set.add(img_id)
+	print len(img_set)
 	f.close()
 	np_data = [('image_id', 'image_as_number', 'question', 'as_numbers', 'length', 'answer', 'answer_as_number')]
 	for indx in range(len(data)):
@@ -120,7 +121,7 @@ ques_embed_size = 50    #gllve vectors are 50 dimensional
 img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size     #can be changed
 batch_size = 100
-
+N = 196
 
 def reset_graph():
     if 'sess' in globals() and sess:
@@ -134,53 +135,96 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     # Placeholders
     ques_placeholder = tf.placeholder(tf.int32, [batch_size, None]) # [batch_size, num_steps]
     ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
-    img_placeholder = tf.placeholder(tf.int32, [batch_size])
+    img_placeholder = tf.placeholder(tf.int32, [batch_size])	
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
     T_placeholder = tf.placeholder(tf.int32,[1])
-    N_placeholder = tf.placeholder(tf.int32,[1])
     keep_prob = tf.constant(1.0)
 
     # Embedding layer
     word_embeddings = tf.Variable(wordEmbeddings, dtype=tf.float32)
     rnn_word_inputs = tf.nn.embedding_lookup(word_embeddings, ques_placeholder)
     img_embeddings =  tf.Variable(imgEmbeddings, dtype=tf.float32)
-    rnn_img_inputs = tf.nn.embedding_lookup(img_embeddings, img_placeholder)
-
-    # RNN
+    rnn_img_inputs = tf.nn.embedding_lookup(img_embeddings, img_placeholder)	#Assume that this will be (512 * 196 - that is 196 512-dimensional vectors)
+    
+	#Question Input Module
     # tf 1.0
-    cell = tf.contrib.rnn.GRUCell(ques_embed_size, hidden_state_size)
     # tf < 1.0
-    #cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
+    with tf.variable_scope('wordGRU'):
+    	# cell = tf.contrib.rnn.GRUCell(ques_embed_size, hidden_state_size)
+    	cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
     init_state = tf.get_variable('init_state', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     init_state = tf.tile(init_state, [batch_size, 1])
     rnn_outputs, final_state = tf.nn.dynamic_rnn(cell, rnn_word_inputs, sequence_length=ques_seqlen_placeholder, initial_state=init_state, dtype=tf.float32)
-
-    # Add dropout, as the model otherwise quickly overfits
+	# Add dropout, as the model otherwise quickly overfits
     rnn_outputs = tf.nn.dropout(rnn_outputs, keep_prob)
     idx = tf.range(batch_size)*tf.shape(rnn_outputs)[1] + (ques_seqlen_placeholder - 1)
-    last_rnn_output = tf.gather(tf.reshape(rnn_outputs, [-1, hidden_state_size]), idx)
+    ques_rnn_output = tf.gather(tf.reshape(rnn_outputs, [-1, hidden_state_size]), idx)
+
+    #Image Input Module
+    #Reshape to 196 by 512
+    rnn_img_inputs = tf.reshape(rnn_img_inputs, [batch_size, N, img_embed_size])
+    #tanh mapping
+    W_img_input = tf.get_variable('W_img_input', [img_embed_size, hidden_state_size], dtype=tf.float32)
+    b_img_input = tf.get_variable('b_img_input', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    rnn_img_mapped = tf.tanh(tf.einsum('ijk,kl->ijl',rnn_img_inputs, W_img_input) + b_img_input)
+    
+    #Bi-directional GRU
+    #Forward
+    with tf.variable_scope('forward'):
+	    # cell_img_fwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
+	    cell_img_fwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
+	    img_init_state_fwd = tf.get_variable('img_init_state_fwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+	    img_init_state_fwd = tf.tile(img_init_state_fwd, [batch_size, 1])
+	    fwd_hidden_states = tf.scan(cell_img_fwd, tf.transpose(rnn_img_mapped, [1,0,2]), initializer=img_init_state_fwd, name="states")
+    
+    #Backward
+    with tf.variable_scope('backward'):
+    	# cell_img_bwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
+    	cell_img_bwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
+    	img_init_state_bwd = tf.get_variable('img_init_state_bwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    	img_init_state_bwd = tf.tile(img_init_state_bwd, [batch_size, 1])
+    	bwd_hidden_states = tf.scan(cell_img_bwd, rnn_img_mapped, initializer=img_init_state_bwd)
+    
+    #Sum up the learned vectors
+    img_features = fwd_hidden_states+bwd_hidden_states
 
     #T rounds for updating Memory
+    #Initialize Variables
+    W_inner = tf.get_variable('W_inner', [4*hidden_state_size, hidden_state_size], dtype=tf.float32)
+    W_outer = tf.get_variable('W_outer', [hidden_state_size, hidden_state_size], dtype=tf.float32)
+    b_inner = tf.get_variable('b_inner', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    b_outer = tf.get_variable('b_outer', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    W_r = tf.get_variable('W_r', [hidden_state_size, hidden_state_size], dtype=tf.float32)
+    U_r = tf.get_variable('U_r', [hidden_state_size, hidden_state_size], dtype=tf.float32)
+    b_r = tf.get_variable('b_r', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    W_h = tf.get_variable('W_h', [hidden_state_size, hidden_state_size], dtype=tf.float32)
+    U_h = tf.get_variable('U_h', [hidden_state_size, hidden_state_size], dtype=tf.float32)
+    b_h = tf.get_variable('b_h', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    W_t = tf.get_variable('W_t', [hidden_state_size, hidden_state_size], dtype=tf.float32)
+    b_t = tf.get_variable('b_t', [3*hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    W_a = tf.get_variable('W_a', [hidden_state_size, num_classes], dtype=tf.float32)
+    #Initialize memory
+    m = ques_rnn_output
+    #Initialize context
+    c = tf.zeros((1,hidden_state_size))
     for t in range(T_placeholder):
-	    # Attention Gates
-	    for i in range(N_placeholder):
+    	prev_m = m
+    	h = c
+    	# Attention Gates
+    	for i in range(N):
+	    	z = tf.concat(0,[tf.multiply(img_features[:,i,:], ques_rnn_output), tf.multiply(img_features[:,i,:], prev_m),tf.abs(img_features[:,i,:]-ques_rnn_output),tf.abs(img_features[:,i,:]-prev_m)])
+	    	Z = tf.matmul(tf.tanh(tf.matmul(z,W_inner)+b_inner),W_outer)+b_outer
+	    	g = tf.nn.softmax(Z)
+		    # Attention Mechanism - Attention based GRU
+	    	r = tf.nn.sigmoid(tf.matmul(img_features[:,i,:],W_r) + tf.matmul(h,U_r) + b_r)
+	    	hprime = tf.tanh(tf.matmul(img_features[:,i,:],W_h) + tf.multiply(r,tf.matmul(h,U_h)) + b_h)
+	    	h=tf.multiply(g,hprime)+tf.multiply((1-g),h)
+	    #Update context
+		c = h
+	    # Memory Update using the final state of the Attention based GRU
+		m = tf.nn.relu(tf.matmul(tf.concat(prev_m,c,ques_rnn_output),W_t) + b_t)
 
-
-	    # Attention Mechanism
-	    for i in range(N_placeholder):
-	    	
-	    # Memory Update
-
-
-
-    # Softmax layer
-    with tf.variable_scope('softmax'):
-        W_ques = tf.get_variable('W_ques', [hidden_state_size, num_classes], dtype=tf.float32)
-        W_img = tf.get_variable('W_img', [img_embed_size, num_classes], dtype=tf.float32)
-        b = tf.get_variable('b', [num_classes], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
-    
-    logits = tf.matmul(last_rnn_output, W_ques) + tf.matmul(rnn_img_inputs, W_img) + b
-    preds = tf.nn.softmax(logits)
+	preds = tf.nn.softmax(tf.matmul(m,W_a))
     correct = tf.equal(tf.cast(tf.argmax(preds,1),tf.int32), ans_placeholder)
     accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
@@ -237,4 +281,4 @@ def train_graph(graph, batch_size = batch_size, num_epochs = 100, iterator = Pad
     return tr_losses, te_losses
 
 g = build_graph(batch_size=batch_size)
-tr_losses, te_losses = train_graph(g)
+# tr_losses, te_losses = train_graph(g)
