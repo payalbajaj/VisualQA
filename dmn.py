@@ -173,9 +173,12 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     with tf.variable_scope('forward'):
 	    # cell_img_fwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
 	    cell_img_fwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
-	    img_init_state_fwd = tf.get_variable('img_init_state_fwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
-	    img_init_state_fwd = tf.tile(img_init_state_fwd, [batch_size, 1])
-	    fwd_hidden_states = tf.scan(cell_img_fwd, tf.transpose(rnn_img_mapped, [1,0,2]), initializer=img_init_state_fwd, name="states")
+	    # img_init_state_fwd = tf.get_variable('img_init_state_fwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+	    # img_init_state_fwd = tf.tile(img_init_state_fwd, [batch_size, 1])
+	    img_init_state_fwd = rnn_img_mapped[:, 0, :]
+	    img_init_state_fwd = tf.multiply(img_init_state_fwd, tf.zeros([batch_size, hidden_state_size]))
+	    img_init_state_fwd = tf.pack([img_init_state_fwd, img_init_state_fwd])
+	    fwd_hidden_memory_states = tf.scan(cell_img_fwd, tf.transpose(tf.transpose(rnn_img_mapped, perm=[2,0,1])), initializer=img_init_state_fwd, name="states")
     
     #Backward
     with tf.variable_scope('backward'):
@@ -183,8 +186,10 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     	cell_img_bwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
     	img_init_state_bwd = tf.get_variable('img_init_state_bwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     	img_init_state_bwd = tf.tile(img_init_state_bwd, [batch_size, 1])
-    	bwd_hidden_states = tf.scan(cell_img_bwd, rnn_img_mapped, initializer=img_init_state_bwd)
+    	bwd_hidden_states = tf.scan(cell_img_bwd, tf.transpose(rnn_img_mapped, [1,0,2]), initializer=img_init_state_bwd)
     
+
+    # o_fwd, o_bwd = tf.nn.bidirectional_rnn(cell_img_fwd, cell_img_bwd, tf.transpose(rnn_img_mapped, [1,0,2]),  initial_state_fw=img_init_state_fwd, initial_state_bw=img_init_state_bwd)
     #Sum up the learned vectors
     img_features = fwd_hidden_states+bwd_hidden_states
 
