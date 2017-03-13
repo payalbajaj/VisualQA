@@ -145,7 +145,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     rnn_word_inputs = tf.nn.embedding_lookup(word_embeddings, ques_placeholder)
     img_embeddings =  tf.Variable(imgEmbeddings, dtype=tf.float32)
     rnn_img_inputs = tf.nn.embedding_lookup(img_embeddings, img_placeholder)	#Assume that this will be (512 * 196 - that is 196 512-dimensional vectors)
-    
+
 	#Question Input Module
     # tf 1.0
     # tf < 1.0
@@ -243,42 +243,42 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-def train_graph(graph, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
-    with tf.Session() as sess:
-        sess.run(tf.initialize_all_variables())
-        tr = iterator(data_df)
-        # te = iterator(test)
+# def train_graph(graph, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
+#     with tf.Session() as sess:
+#         sess.run(tf.initialize_all_variables())
+#         tr = iterator(data_df)
+#         # te = iterator(test)
 
-        step, accuracy = 0, 0
-        tr_losses, te_losses = [], []
-        current_epoch = 0
-        while current_epoch < num_epochs:
-            step += 1
-            batch = tr.next_batch(batch_size)
-            feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
-            accuracy_, _ = sess.run([g['accuracy'], g['ts']], feed_dict=feed)
-            accuracy += accuracy_
+#         step, accuracy = 0, 0
+#         tr_losses, te_losses = [], []
+#         current_epoch = 0
+#         while current_epoch < num_epochs:
+#             step += 1
+#             batch = tr.next_batch(batch_size)
+#             feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
+#             accuracy_, _ = sess.run([g['accuracy'], g['ts']], feed_dict=feed)
+#             accuracy += accuracy_
 
-            if tr.epochs > current_epoch:
-                current_epoch += 1
-                tr_losses.append(accuracy / step)
-                step, accuracy = 0, 0
+#             if tr.epochs > current_epoch:
+#                 current_epoch += 1
+#                 tr_losses.append(accuracy / step)
+#                 step, accuracy = 0, 0
 
-                #eval test set
-                # te_epoch = te.epochs
-                # while te.epochs == te_epoch:
-                #     step += 1
-                #     batch = te.next_batch(batch_size)
-                #     feed = {g['x']: batch[0], g['y']: batch[1], g['seqlen']: batch[2]}
-                #     accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
-                #     accuracy += accuracy_
+#                 #eval test set
+#                 # te_epoch = te.epochs
+#                 # while te.epochs == te_epoch:
+#                 #     step += 1
+#                 #     batch = te.next_batch(batch_size)
+#                 #     feed = {g['x']: batch[0], g['y']: batch[1], g['seqlen']: batch[2]}
+#                 #     accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
+#                 #     accuracy += accuracy_
 
-                # te_losses.append(accuracy / step)
-                # step, accuracy = 0,0
-                # print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- te:", te_losses[-1])
-                print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1])
+#                 # te_losses.append(accuracy / step)
+#                 # step, accuracy = 0,0
+#                 # print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- te:", te_losses[-1])
+#                 print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1])
 
-    return tr_losses, te_losses
+#     return tr_losses, te_losses
 
 g = build_graph(batch_size=batch_size)
 # tr_losses, te_losses = train_graph(g)
