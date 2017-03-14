@@ -21,7 +21,7 @@ fi = open('./notused.txt', 'w')
 def imageget(startind, endind):
 	imgs = []
 	for i, filen in enumerate(filenames[startind:endind]):
-		im = utils.load_image("/home/alisha/VG_100K/" + filen + ".jpg")
+		im = utils.load_image("~/VG_100K/" + filen + ".jpg")
 		if len(im.shape) != 3:
 			fi.write(filen + '\n')
 			continue
@@ -29,7 +29,7 @@ def imageget(startind, endind):
 	imgsnp = np.array(imgs)
 	return imgsnp
 
-f = open('../cnn.txt', 'w')
+f = open('~/data_VisualQA/cnn.txt', 'w')
 with tf.Session() as sess:
     size = len(filenames)
     for step in xrange(size / BATCH_SIZE):
