@@ -13,7 +13,7 @@ for line in f:
 f.close()
 
 def print_visembed(nameimg, sumsecond, f):
-	strtoadd = nameimg + " " + " ".join([str(i) for i in sumsecond]) + "\n"
+	strtoadd = nameimg + " " + " ".join(str(i) for i in sumsecond) + "\n"
 	f.write(strtoadd)  # python will convert \n to os.linesep
 
 fi = open('./notused.txt', 'w')
@@ -43,7 +43,8 @@ with tf.Session() as sess:
       output = sess.run(vgg.output, feed_dict=feed_dict)
       for ind, out in enumerate(output):
 		npyout = np.array(out)
-		sumit = np.concatenate(npyout[:])
+		sumit = npyout.reshape(-1)
+		print sumit.shape
 		print_visembed(filenames[offset+ind], sumit, f)
 f.close()
 fi.close()
