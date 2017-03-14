@@ -182,7 +182,8 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
 	    # fwd_hidden_states = tf.scan(cell_img_fwd, transpose_inputs, initializer=img_init_state_fwd, name="fwd_states")
     
     #Backward
-    rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [False, True, False])
+    rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [1])
+    #rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [False, True, False])
     with tf.variable_scope('backward'):
     	cell_img_bwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
     	#cell_img_bwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
