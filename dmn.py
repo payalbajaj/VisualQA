@@ -122,6 +122,7 @@ img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size     #can be changed
 batch_size = 100
 N = 196
+T = 2
 
 def reset_graph():
     if 'sess' in globals() and sess:
@@ -137,7 +138,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
     img_placeholder = tf.placeholder(tf.int32, [batch_size])	
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
-    T_placeholder = tf.placeholder(tf.int32,[1])
+    # T_placeholder = tf.placeholder(tf.int32,shape=())
     keep_prob = tf.constant(1.0)
 
     # Embedding layer
@@ -147,8 +148,6 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     rnn_img_inputs = tf.nn.embedding_lookup(img_embeddings, img_placeholder)	#Assume that this will be (512 * 196 - that is 196 512-dimensional vectors)
 
 	#Question Input Module
-    # tf 1.0
-    # tf < 1.0
     with tf.variable_scope('wordGRU'):
     	# cell = tf.contrib.rnn.GRUCell(ques_embed_size, hidden_state_size)
     	cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
@@ -172,10 +171,15 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     #Forward
     with tf.variable_scope('forward'):
 	    # cell_img_fwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
-	    cell_img_fwd = tf.nn.rnn_cell.wordGRUCell(hidden_state_size, hidden_state_size)
+	    cell_img_fwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
 	    img_init_state_fwd = rnn_img_mapped[:, 0, :]
 	    img_init_state_fwd = tf.multiply(img_init_state_fwd, tf.zeros([batch_size, hidden_state_size]))
-	    fwd_hidden_memory_states = tf.scan(cell_img_fwd, tf.transpose(tf.transpose(rnn_img_mapped, perm=[2,0,1])), initializer=img_init_state_fwd, name="fwd_states")
+	    # rnn_img_mapped_fwd = tf.transpose(rnn_img_mapped, perm=[1,0,2])
+	    # rnn_img_mapped_fwd = tf.reshape(rnn_img_mapped_fwd, [-1, 1])
+	    # rnn_img_mapped_fwd = tf.split(0,N, rnn_img_mapped_fwd)
+	    # print transpose_inputs.get_shape()
+	    rnn_outputs_fwd, final_state_fwd = tf.nn.dynamic_rnn(cell_img_fwd, rnn_img_mapped, initial_state=img_init_state_fwd, dtype=tf.float32)
+	    # fwd_hidden_states = tf.scan(cell_img_fwd, transpose_inputs, initializer=img_init_state_fwd, name="fwd_states")
     
     #Backward
     rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [False, True, False])
@@ -184,12 +188,14 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     	cell_img_bwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
     	img_init_state_bwd = tf.get_variable('img_init_state_bwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     	img_init_state_bwd = tf.tile(img_init_state_bwd, [batch_size, 1])
-    	bwd_hidden_states = tf.scan(cell_img_bwd, tf.transpose(tf.transpose(rnn_img_mapped_rev, [2,0,1])), initializer=img_init_state_bwd, name="bwd_states")
+    	# rnn_img_mapped_bwd = tf.transpose(rnn_img_mapped_rev, perm=[1,0,2])
+    	# rnn_img_mapped_bwd = tf.reshape(rnn_img_mapped_bwd, [-1, 1])
+    	# rnn_img_mapped_bwd = tf.split(0,N, rnn_img_mapped_bwd)
+    	rnn_outputs_bwd, final_state_bwd = tf.nn.dynamic_rnn(cell_img_bwd, rnn_img_mapped_rev, initial_state=img_init_state_fwd, dtype=tf.float32)
+    	# bwd_hidden_states = tf.scan(cell_img_bwd, rnn_img_mapped_bwd, initializer=img_init_state_bwd, name="bwd_states")
     
-
-    # o_fwd, o_bwd = tf.nn.bidirectional_rnn(cell_img_fwd, cell_img_bwd, tf.transpose(rnn_img_mapped, [1,0,2]),  initial_state_fw=img_init_state_fwd, initial_state_bw=img_init_state_bwd)
     #Sum up the learned vectors
-    img_features = fwd_hidden_states+bwd_hidden_states
+    img_features = rnn_outputs_fwd+rnn_outputs_bwd
 
     #T rounds for updating Memory
     #Initialize Variables
@@ -203,19 +209,20 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     W_h = tf.get_variable('W_h', [hidden_state_size, hidden_state_size], dtype=tf.float32)
     U_h = tf.get_variable('U_h', [hidden_state_size, hidden_state_size], dtype=tf.float32)
     b_h = tf.get_variable('b_h', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
-    W_t = tf.get_variable('W_t', [hidden_state_size, hidden_state_size], dtype=tf.float32)
-    b_t = tf.get_variable('b_t', [3*hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
+    W_t = tf.get_variable('W_t', [3*hidden_state_size, hidden_state_size], dtype=tf.float32)
+    b_t = tf.get_variable('b_t', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     W_a = tf.get_variable('W_a', [hidden_state_size, num_classes], dtype=tf.float32)
     #Initialize memory
     m = ques_rnn_output
     #Initialize context
     c = tf.zeros((1,hidden_state_size))
-    for t in range(T_placeholder):
+    for t in range(T):
+    	print t
     	prev_m = m
     	h = c
     	# Attention Gates
     	for i in range(N):
-	    	z = tf.concat(0,[tf.multiply(img_features[:,i,:], ques_rnn_output), tf.multiply(img_features[:,i,:], prev_m),tf.abs(img_features[:,i,:]-ques_rnn_output),tf.abs(img_features[:,i,:]-prev_m)])
+	    	z = tf.concat(1,[tf.multiply(img_features[:,i,:], ques_rnn_output), tf.multiply(img_features[:,i,:], prev_m),tf.abs(img_features[:,i,:]-ques_rnn_output),tf.abs(img_features[:,i,:]-prev_m)])
 	    	Z = tf.matmul(tf.tanh(tf.matmul(z,W_inner)+b_inner),W_outer)+b_outer
 	    	g = tf.nn.softmax(Z)
 		    # Attention Mechanism - Attention based GRU
@@ -225,9 +232,10 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
 	    #Update context
 		c = h
 	    # Memory Update using the final state of the Attention based GRU
-		m = tf.nn.relu(tf.matmul(tf.concat(prev_m,c,ques_rnn_output),W_t) + b_t)
+		m = tf.nn.relu(tf.matmul(tf.concat(1, [prev_m,c,ques_rnn_output]),W_t) + b_t)
 
-	preds = tf.nn.softmax(tf.matmul(m,W_a))
+	logits = tf.matmul(m,W_a)
+	preds = tf.nn.softmax(logits)
     correct = tf.equal(tf.cast(tf.argmax(preds,1),tf.int32), ans_placeholder)
     accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
@@ -246,42 +254,42 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-# def train_graph(graph, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
-#     with tf.Session() as sess:
-#         sess.run(tf.initialize_all_variables())
-#         tr = iterator(data_df)
-#         # te = iterator(test)
+def train_graph(graph, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
+    with tf.Session() as sess:
+        sess.run(tf.initialize_all_variables())
+        tr = iterator(data_df)
+        # te = iterator(test)
 
-#         step, accuracy = 0, 0
-#         tr_losses, te_losses = [], []
-#         current_epoch = 0
-#         while current_epoch < num_epochs:
-#             step += 1
-#             batch = tr.next_batch(batch_size)
-#             feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
-#             accuracy_, _ = sess.run([g['accuracy'], g['ts']], feed_dict=feed)
-#             accuracy += accuracy_
+        step, accuracy = 0, 0
+        tr_losses, te_losses = [], []
+        current_epoch = 0
+        while current_epoch < num_epochs:
+            step += 1
+            batch = tr.next_batch(batch_size)
+            feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
+            accuracy_, _ = sess.run([g['accuracy'], g['ts']], feed_dict=feed)
+            accuracy += accuracy_
 
-#             if tr.epochs > current_epoch:
-#                 current_epoch += 1
-#                 tr_losses.append(accuracy / step)
-#                 step, accuracy = 0, 0
+            if tr.epochs > current_epoch:
+                current_epoch += 1
+                tr_losses.append(accuracy / step)
+                step, accuracy = 0, 0
 
-#                 #eval test set
-#                 # te_epoch = te.epochs
-#                 # while te.epochs == te_epoch:
-#                 #     step += 1
-#                 #     batch = te.next_batch(batch_size)
-#                 #     feed = {g['x']: batch[0], g['y']: batch[1], g['seqlen']: batch[2]}
-#                 #     accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
-#                 #     accuracy += accuracy_
+                #eval test set
+                # te_epoch = te.epochs
+                # while te.epochs == te_epoch:
+                #     step += 1
+                #     batch = te.next_batch(batch_size)
+                #     feed = {g['x']: batch[0], g['y']: batch[1], g['seqlen']: batch[2]}
+                #     accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
+                #     accuracy += accuracy_
 
-#                 # te_losses.append(accuracy / step)
-#                 # step, accuracy = 0,0
-#                 # print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- te:", te_losses[-1])
-#                 print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1])
+                # te_losses.append(accuracy / step)
+                # step, accuracy = 0,0
+                # print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- te:", te_losses[-1])
+                print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1])
 
-#     return tr_losses, te_losses
+    return tr_losses, te_losses
 
 g = build_graph(batch_size=batch_size)
-# tr_losses, te_losses = train_graph(g)
+tr_losses, te_losses = train_graph(g)
