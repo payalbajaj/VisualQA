@@ -138,7 +138,7 @@ img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size     #can be changed
 batch_size = 100
 N = 196
-T = 1
+T = 2
 
 def reset_graph():
     if 'sess' in globals() and sess:
@@ -264,7 +264,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
+def train_graph(graph, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         # sess.run(tf.initialize_all_variables())
@@ -286,24 +286,24 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
             accuracy += accuracy_
 
             wups_scores = []
-            idx = 0
-            for ent in batch[2]:
+            for idx in range(batch_size):
+            	print idx
             	pred_idx = preds_idx_[idx]
-            	actual_idx = ent
-            	idx += 1
+            	actual_idx = batch[2][idx]
+            	print pred_idx, actual_idx, len(vocab)
             	for word, word_idx in vocab.iteritems():
-            		if word_idx == pred_idx:
-            			pred_word = word
-            		if word_idx == actual_idx:
-            			actual_word = word
-            	wordFromList1 = wordnet.synsets(pred_word)
-            	wordFromList2 = wordnet.synsets(actual_word)
-            	if wordFromList1 and wordFromList2:
-            		s = wordFromList1[0].wup_similarity(wordFromList2[0])
-            		if(s != None):
-            			wups_scores.append(s)
-            if(len(wups_scores)>0):
-            	avg_wups_score = sum(wups_scores)/len(wups_scores)
+	    		print word, word_idx
+	    		if word_idx == pred_idx:
+	    			pred_word = word
+	    		if word_idx == actual_idx:
+	    			actual_word = word
+		wordFromList1 = wordnet.synsets(pred_word)
+		wordFromList2 = wordnet.synsets(actual_word)
+		if wordFromList1 and wordFromList2:
+			s = wordFromList1[0].wup_similarity(wordFromList2[0])
+			wups_scores.append(s)
+	    	if(len(wups_scores)>0):
+				avg_wups_score = wups_scores/len(wups_scores)
 
             if tr.epochs > current_epoch:
                 current_epoch += 1
