@@ -45,11 +45,15 @@ class PaddedDataIterator(SimpleDataIterator):
 
 ########Read the data and create the data frame########
 data_path = "../data_VisualQA/question_answers.json"
-file_name = "../data_VisualQA/data.pkl"
+file_name = "../data_VisualQA/data_train.pkl"
+file_name2 = "../data_VisualQA/data_dev.pkl"
+file_name3 = "../data_VisualQA/data_test.pkl"
 vocab_mapping = "../data_VisualQA/vocab.pkl"
 img_mapping = "../data_VisualQA/img.pkl"
-if(os.path.exists(file_name) and os.path.exists(vocab_mapping) and os.path.exists(img_mapping)):
-	data_df = pd.read_pickle(file_name)
+if(os.path.exists(file_name) and os.path.exists(file_name2) and os.path.exists(file_name3) and os.path.exists(vocab_mapping) and os.path.exists(img_mapping)):
+	data_train = pd.read_pickle(file_name)
+	data_dev = pd.read_pickle(file_name2)
+	data_test = pd.read_pickle(file_name3)
 	words_df = pd.read_pickle(vocab_mapping)
     #create dictionary needed for embeddings
 	vocab = words_df.set_index(str('word'))["number"].to_dict()
@@ -105,7 +109,18 @@ else:
 				if(len(np_data)%100 == 0):
 					print len(np_data)
 	data_df = pd.DataFrame(data=np_data[1:], columns=list(np_data[0]))
-	data_df.to_pickle(file_name)
+	#Split data - 70% Train, 20% Dev, 10% Test
+	#Split into train and remaining
+	msk = np.random.rand(len(data_df)) < 0.7
+	data_train = data_df[msk]
+	data_rem = data_df[~msk]
+	#Split the remaining data into dev and test
+	msk = np.random.rand(len(data_rem)) < 0.67
+	data_dev = data_rem[msk]
+	data_test = data_rem[~msk]
+	data_train.to_pickle(file_name)
+	data_dev.to_pickle(file_name2)
+	data_test.to_pickle(file_name3)
 	words_df = pd.DataFrame(data=vocab.items(), columns=['word', 'number'])
 	words_df.to_pickle(vocab_mapping)
 	image_df = pd.DataFrame(data=img_vocab.items(), columns=['img', 'number'])
@@ -138,7 +153,6 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
     img_placeholder = tf.placeholder(tf.int32, [batch_size])	
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
-    # T_placeholder = tf.placeholder(tf.int32,shape=())
     keep_prob = tf.constant(1.0)
 
     # Embedding layer
@@ -166,7 +180,6 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     W_img_input = tf.get_variable('W_img_input', [img_embed_size, hidden_state_size], dtype=tf.float32)
     b_img_input = tf.get_variable('b_img_input', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     rnn_img_mapped = tf.tanh(tf.einsum('ijk,kl->ijl',rnn_img_inputs, W_img_input) + b_img_input)
-    
     #Bi-directional GRU
     #Forward
     with tf.variable_scope('forward'):
@@ -174,13 +187,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
 	    #cell_img_fwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
 	    img_init_state_fwd = rnn_img_mapped[:, 0, :]
 	    img_init_state_fwd = tf.multiply(img_init_state_fwd, tf.zeros([batch_size, hidden_state_size]))
-	    # rnn_img_mapped_fwd = tf.transpose(rnn_img_mapped, perm=[1,0,2])
-	    # rnn_img_mapped_fwd = tf.reshape(rnn_img_mapped_fwd, [-1, 1])
-	    # rnn_img_mapped_fwd = tf.split(0,N, rnn_img_mapped_fwd)
-	    # print transpose_inputs.get_shape()
 	    rnn_outputs_fwd, final_state_fwd = tf.nn.dynamic_rnn(cell_img_fwd, rnn_img_mapped, initial_state=img_init_state_fwd, dtype=tf.float32)
-	    # fwd_hidden_states = tf.scan(cell_img_fwd, transpose_inputs, initializer=img_init_state_fwd, name="fwd_states")
-    
     #Backward
     rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [1])
     #rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [False, True, False])
@@ -189,13 +196,8 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     	#cell_img_bwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
     	img_init_state_bwd = tf.get_variable('img_init_state_bwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     	img_init_state_bwd = tf.tile(img_init_state_bwd, [batch_size, 1])
-    	# rnn_img_mapped_bwd = tf.transpose(rnn_img_mapped_rev, perm=[1,0,2])
-    	# rnn_img_mapped_bwd = tf.reshape(rnn_img_mapped_bwd, [-1, 1])
-    	# rnn_img_mapped_bwd = tf.split(0,N, rnn_img_mapped_bwd)
     	rnn_outputs_bwd, final_state_bwd = tf.nn.dynamic_rnn(cell_img_bwd, rnn_img_mapped_rev, initial_state=img_init_state_fwd, dtype=tf.float32)
-    	# bwd_hidden_states = tf.scan(cell_img_bwd, rnn_img_mapped_bwd, initializer=img_init_state_bwd, name="bwd_states")
-    
-    #Sum up the learned vectors
+    #Sum up the learned vectors to get facts of the image
     img_features = rnn_outputs_fwd+rnn_outputs_bwd
 
     #T rounds for updating Memory
@@ -213,7 +215,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     W_t = tf.get_variable('W_t', [3*hidden_state_size, hidden_state_size], dtype=tf.float32)
     b_t = tf.get_variable('b_t', [hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     W_a = tf.get_variable('W_a', [hidden_state_size, num_classes], dtype=tf.float32)
-    #Initialize memory
+    #Initialize memory to questiosn 
     m = ques_rnn_output
     #Initialize context
     c = tf.zeros((1,hidden_state_size))
@@ -260,12 +262,17 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
 
 def train_graph(graph, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())#tf.initialize_all_variables())
-        tr = iterator(data_df)
-        # te = iterator(test)
+        sess.run(tf.global_variables_initializer())
+        #tf.initialize_all_variables())
+        #Train Data
+        tr = iterator(data_train)
+        #Dev Data
+        dev = iterator(data_dev)
+        #Test Data
+        te = iterator(data_test)
 
         step, accuracy = 0, 0
-        tr_losses, te_losses = [], []
+        tr_losses, dev_losses, te_losses = [], [], []
         current_epoch = 0
         while current_epoch < num_epochs:
             step += 1
@@ -279,21 +286,31 @@ def train_graph(graph, batch_size = batch_size, num_epochs = 100, iterator = Pad
                 tr_losses.append(accuracy / step)
                 step, accuracy = 0, 0
 
-                #eval test set
-                # te_epoch = te.epochs
-                # while te.epochs == te_epoch:
-                #     step += 1
-                #     batch = te.next_batch(batch_size)
-                #     feed = {g['x']: batch[0], g['y']: batch[1], g['seqlen']: batch[2]}
-                #     accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
-                #     accuracy += accuracy_
+                # eval dev set
+                dev_epoch = dev.epochs
+                while dev.epochs == dev_epoch:
+                    step += 1
+                    batch = dev.next_batch(batch_size)
+                    feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
+                    accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
+                    accuracy += accuracy_
 
-                # te_losses.append(accuracy / step)
-                # step, accuracy = 0,0
-                # print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- te:", te_losses[-1])
-                print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1])
+                dev_losses.append(accuracy / step)
+                step, accuracy = 0,0
+                print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- dev:", dev_losses[-1])
 
-    return tr_losses, te_losses
+        #Run on test data and get accuracy here
+        te_epoch = te.epochs
+        while te.epochs == te_epoch:
+            step += 1
+            batch = te.next_batch(batch_size)
+            feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
+            accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
+            accuracy += accuracy_
+        te_losses.append(accuracy / step)
+        step, accuracy = 0,0
+    
+    return tr_losses, dev_losses, te_losses
 
 g = build_graph(batch_size=batch_size)
-tr_losses, te_losses = train_graph(g)
+tr_losses, dev_losses, te_losses = train_graph(g)
