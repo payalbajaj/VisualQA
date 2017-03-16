@@ -78,7 +78,7 @@ else:
 	img_set = set()
 	f = open("../data_VisualQA/cnn.txt", "r")
 	for line in f:
-		img_id = line.split(" ")[0]
+		img_id = line.split(" ")[0].split('/')[4].split('.')[0]
 		img_set.add(img_id)
 	print len(img_set)
 	f.close()
@@ -136,7 +136,7 @@ imgEmbeddings = loadImgVectors(img_vocab)
 ques_embed_size = 50    #gllve vectors are 50 dimensional
 img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size     #can be changed
-batch_size = 100
+batch_size = 300
 N = 196
 T = 1
 
@@ -164,8 +164,8 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
 
 	#Question Input Module
     with tf.variable_scope('wordGRU'):
-    	# cell = tf.contrib.rnn.GRUCell(ques_embed_size, hidden_state_size)
-    	cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
+    	cell = tf.contrib.rnn.GRUCell(ques_embed_size, hidden_state_size)
+    	#cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
     init_state = tf.get_variable('init_state', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     init_state = tf.tile(init_state, [batch_size, 1])
     rnn_outputs, final_state = tf.nn.dynamic_rnn(cell, rnn_word_inputs, sequence_length=ques_seqlen_placeholder, initial_state=init_state, dtype=tf.float32)
@@ -184,17 +184,17 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     #Bi-directional GRU
     #Forward
     with tf.variable_scope('forward'):
-	    # cell_img_fwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
-	    cell_img_fwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
+	    cell_img_fwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
+	    #cell_img_fwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
 	    img_init_state_fwd = rnn_img_mapped[:, 0, :]
 	    img_init_state_fwd = tf.multiply(img_init_state_fwd, tf.zeros([batch_size, hidden_state_size]))
 	    rnn_outputs_fwd, final_state_fwd = tf.nn.dynamic_rnn(cell_img_fwd, rnn_img_mapped, initial_state=img_init_state_fwd, dtype=tf.float32)
     #Backward
-    # rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [1])
-    rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [False, True, False])
+    rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [1])
+    #rnn_img_mapped_rev = tf.reverse(rnn_img_mapped, [False, True, False])
     with tf.variable_scope('backward'):
-    	# cell_img_bwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
-    	cell_img_bwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
+    	cell_img_bwd = tf.contrib.rnn.GRUCell(hidden_state_size, hidden_state_size)
+    	#cell_img_bwd = tf.nn.rnn_cell.GRUCell(hidden_state_size, hidden_state_size)
     	img_init_state_bwd = tf.get_variable('img_init_state_bwd', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     	img_init_state_bwd = tf.tile(img_init_state_bwd, [batch_size, 1])
     	rnn_outputs_bwd, final_state_bwd = tf.nn.dynamic_rnn(cell_img_bwd, rnn_img_mapped_rev, initial_state=img_init_state_fwd, dtype=tf.float32)
@@ -226,8 +226,8 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     	h = c
     	# Attention Gates
     	for i in range(N):
-	    	# z = tf.concat([tf.multiply(img_features[:,i,:], ques_rnn_output), tf.multiply(img_features[:,i,:], prev_m),tf.abs(img_features[:,i,:]-ques_rnn_output),tf.abs(img_features[:,i,:]-prev_m)], 1)
-	    	z = tf.concat(1,[tf.multiply(img_features[:,i,:], ques_rnn_output), tf.multiply(img_features[:,i,:], prev_m),tf.abs(img_features[:,i,:]-ques_rnn_output),tf.abs(img_features[:,i,:]-prev_m)])
+	    	z = tf.concat([tf.multiply(img_features[:,i,:], ques_rnn_output), tf.multiply(img_features[:,i,:], prev_m),tf.abs(img_features[:,i,:]-ques_rnn_output),tf.abs(img_features[:,i,:]-prev_m)], 1)
+	    	#z = tf.concat(1,[tf.multiply(img_features[:,i,:], ques_rnn_output), tf.multiply(img_features[:,i,:], prev_m),tf.abs(img_features[:,i,:]-ques_rnn_output),tf.abs(img_features[:,i,:]-prev_m)])
 	    	Z = tf.matmul(tf.tanh(tf.matmul(z,W_inner)+b_inner),W_outer)+b_outer
 	    	g = tf.nn.softmax(Z)
 		    # Attention Mechanism - Attention based GRU
@@ -237,8 +237,8 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
 	    #Update context
 		c = h
 	    # Memory Update using the final state of the Attention based GRU
-		m = tf.nn.relu(tf.matmul(tf.concat(1, [prev_m,c,ques_rnn_output]),W_t) + b_t)
-		# m = tf.nn.relu(tf.matmul(tf.concat([prev_m,c,ques_rnn_output], 1),W_t) + b_t)
+		#m = tf.nn.relu(tf.matmul(tf.concat(1, [prev_m,c,ques_rnn_output]),W_t) + b_t)
+		m = tf.nn.relu(tf.matmul(tf.concat([prev_m,c,ques_rnn_output], 1),W_t) + b_t)
 
 
 	logits = tf.matmul(m,W_a)
@@ -264,7 +264,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
+def train_graph(g, batch_size = batch_size, num_epochs = 300, iterator = PaddedDataIterator):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         # sess.run(tf.initialize_all_variables())
@@ -338,3 +338,6 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
 
 g = build_graph(batch_size=batch_size)
 tr_losses, dev_losses, te_losses = train_graph(g)
+np.savetxt('./trainingloss.txt', np.array(tr_losses), delimiter='\n')
+np.savetxt('./devloss.txt', np.array(dev_losses), delimiter='\n')
+np.savetxt('./testloss.txt',np.array(te_losses), delimiter='\n')

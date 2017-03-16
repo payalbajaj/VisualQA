@@ -2,34 +2,29 @@ import numpy as np
 import tensorflow as tf
 import vgg19
 import utils
+import glob
 
 BATCH_SIZE = 10
 
 
-filenames = []
-f = open('../data/image_ids.txt', 'r')
-for line in f:
-	filenames.append(line.strip())
-f.close()
-
+filenames = glob.glob('/home/admin224N/VG_100K/*')
+print len(filenames)
 def print_visembed(nameimg, sumsecond, f):
 	strtoadd = nameimg + " " + " ".join(str(i) for i in sumsecond) + "\n"
 	f.write(strtoadd)  # python will convert \n to os.linesep
 
-fi = open('./notused.txt', 'w')
 	
 def imageget(startind, endind):
 	imgs = []
 	for i, filen in enumerate(filenames[startind:endind]):
-		im = utils.load_image("~/VG_100K/" + filen + ".jpg")
+		im = utils.load_image(filen)
 		if len(im.shape) != 3:
-			fi.write(filen + '\n')
 			continue
 		imgs.append(im.reshape((448, 448, 3)))
 	imgsnp = np.array(imgs)
 	return imgsnp
 
-f = open('~/data_VisualQA/cnn.txt', 'w')
+f = open('/home/admin224N/data_VisualQA/cnn.txt', 'w')
 with tf.Session() as sess:
     size = len(filenames)
     for step in xrange(size / BATCH_SIZE):
@@ -47,4 +42,3 @@ with tf.Session() as sess:
 		print sumit.shape
 		print_visembed(filenames[offset+ind], sumit, f)
 f.close()
-fi.close()
