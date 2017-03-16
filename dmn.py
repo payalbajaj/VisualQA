@@ -136,7 +136,7 @@ imgEmbeddings = loadImgVectors(img_vocab)
 ques_embed_size = 50    #gllve vectors are 50 dimensional
 img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size     #can be changed
-batch_size = 300
+batch_size = 100
 N = 196
 T = 1
 
@@ -264,7 +264,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-def train_graph(g, batch_size = batch_size, num_epochs = 300, iterator = PaddedDataIterator):
+def train_graph(g, batch_size = batch_size, num_epochs = 500, iterator = PaddedDataIterator):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         # sess.run(tf.initialize_all_variables())
@@ -277,7 +277,9 @@ def train_graph(g, batch_size = batch_size, num_epochs = 300, iterator = PaddedD
 
         step, accuracy = 0, 0
         tr_losses, dev_losses, te_losses = [], [], []
-        current_epoch = 0
+	wupsscores = []
+	current_epoch = 0
+	curwups = []
         while current_epoch < num_epochs:
             step += 1
             batch = tr.next_batch(batch_size)
@@ -285,9 +287,9 @@ def train_graph(g, batch_size = batch_size, num_epochs = 300, iterator = PaddedD
             accuracy_, preds_idx_, _ = sess.run([g['accuracy'], g['preds_idx'], g['ts']], feed_dict=feed)
             accuracy += accuracy_
 
-            wups_scores = []
             idx = 0
-            for ent in batch[2]:
+            
+	    for ent in batch[2]:
             	pred_idx = preds_idx_[idx]
             	actual_idx = ent
             	idx += 1
@@ -301,15 +303,15 @@ def train_graph(g, batch_size = batch_size, num_epochs = 300, iterator = PaddedD
             	if wordFromList1 and wordFromList2:
             		s = wordFromList1[0].wup_similarity(wordFromList2[0])
             		if(s != None):
-            			wups_scores.append(s)
-            if(len(wups_scores)>0):
-            	avg_wups_score = sum(wups_scores)/len(wups_scores)
-
-            if tr.epochs > current_epoch:
+            			curwups.append(s)
+	    
+	    if tr.epochs > current_epoch:
                 current_epoch += 1
                 tr_losses.append(accuracy / step)
                 step, accuracy = 0, 0
-
+            	avgscore = sum(curwups)/len(curwups)
+		wupsscores.append(avgscore)
+		curwups =  []
                 # eval dev set
                 dev_epoch = dev.epochs
                 while dev.epochs == dev_epoch:
@@ -334,10 +336,11 @@ def train_graph(g, batch_size = batch_size, num_epochs = 300, iterator = PaddedD
         te_losses.append(accuracy / step)
         step, accuracy = 0,0
     
-    return tr_losses, dev_losses, te_losses
+    return tr_losses, dev_losses, te_losses, wupsscores
 
 g = build_graph(batch_size=batch_size)
-tr_losses, dev_losses, te_losses = train_graph(g)
+tr_losses, dev_losses, te_losses, avg_scores = train_graph(g)
 np.savetxt('./trainingloss.txt', np.array(tr_losses), delimiter='\n')
 np.savetxt('./devloss.txt', np.array(dev_losses), delimiter='\n')
 np.savetxt('./testloss.txt',np.array(te_losses), delimiter='\n')
+np.savetxt('./avgscores.txt',np.array(avg_scores), delimiter='\n')
