@@ -10,6 +10,7 @@ import pickle
 from glove import *
 from cnn import *
 from model import Model
+from nltk.corpus import wordnet
 
 max_ques_length = 24
 
@@ -45,11 +46,15 @@ class PaddedDataIterator(SimpleDataIterator):
 
 ########Read the data and create the data frame########
 data_path = "../data_VisualQA/question_answers.json"
-file_name = "../data_VisualQA/data.pkl"
+file_name = "../data_VisualQA/data_train.pkl"
+file_name2 = "../data_VisualQA/data_dev.pkl"
+file_name3 = "../data_VisualQA/data_test.pkl"
 vocab_mapping = "../data_VisualQA/vocab.pkl"
 img_mapping = "../data_VisualQA/img.pkl"
-if(os.path.exists(file_name) and os.path.exists(vocab_mapping) and os.path.exists(img_mapping)):
-	data_df = pd.read_pickle(file_name)
+if(os.path.exists(file_name) and os.path.exists(file_name2) and os.path.exists(file_name3) and os.path.exists(vocab_mapping) and os.path.exists(img_mapping)):
+	data_train = pd.read_pickle(file_name)
+	data_dev = pd.read_pickle(file_name2)
+	data_test = pd.read_pickle(file_name3)
 	words_df = pd.read_pickle(vocab_mapping)
     #create dictionary needed for embeddings
 	vocab = words_df.set_index(str('word'))["number"].to_dict()
@@ -71,10 +76,11 @@ else:
 	img_count = 0
 	###Read images for which embeddings are present and create data frame only for those images####
 	img_set = set()
-	f = open("cnn.txt", "r")
+	f = open("../data_VisualQA/cnn.txt", "r")
 	for line in f:
-		img_id = line.split(" ")[0]
+		img_id = line.split(" ")[0].split('/')[4].split('.')[0]
 		img_set.add(img_id)
+	print len(img_set)
 	f.close()
 	np_data = [('image_id', 'image_as_number', 'question', 'as_numbers', 'length', 'answer', 'answer_as_number')]
 	for indx in range(len(data)):
@@ -104,7 +110,18 @@ else:
 				if(len(np_data)%100 == 0):
 					print len(np_data)
 	data_df = pd.DataFrame(data=np_data[1:], columns=list(np_data[0]))
-	data_df.to_pickle(file_name)
+	#Split data - 70% Train, 20% Dev, 10% Test
+	#Split into train and remaining
+	msk = np.random.rand(len(data_df)) < 0.7
+	data_train = data_df[msk]
+	data_rem = data_df[~msk]
+	#Split the remaining data into dev and test
+	msk = np.random.rand(len(data_rem)) < 0.67
+	data_dev = data_rem[msk]
+	data_test = data_rem[~msk]
+	data_train.to_pickle(file_name)
+	data_dev.to_pickle(file_name2)
+	data_test.to_pickle(file_name3)
 	words_df = pd.DataFrame(data=vocab.items(), columns=['word', 'number'])
 	words_df.to_pickle(vocab_mapping)
 	image_df = pd.DataFrame(data=img_vocab.items(), columns=['img', 'number'])
@@ -116,10 +133,10 @@ imgEmbeddings = loadImgVectors(img_vocab)
 
 #########Building the Baseline Graph############
 
-ques_embed_size = 50    #golve vectors are 50 dimensional
+ques_embed_size = 50    #glove vectors are 50 dimensional
 img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size     #can be changed
-batch_size = 100
+batch_size = 128
 
 
 def reset_graph():
@@ -136,7 +153,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
     img_placeholder = tf.placeholder(tf.int32, [batch_size])
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
-    keep_prob = tf.constant(1.0)
+    keep_prob = tf.constant(0.8)
 
     # Embedding layer
     word_embeddings = tf.Variable(wordEmbeddings, dtype=tf.float32)
@@ -173,7 +190,9 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
     loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=ans_placeholder))
-    train_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
+    train_step = tf.train.AdamOptimizer(1e-3).minimize(loss)
+
+    preds_idx = tf.argmax(preds, 1)
 
     return {
         'ques_placeholder': ques_placeholder,
@@ -184,72 +203,88 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'loss': loss,
         'ts': train_step,
         'preds': preds,
+        'preds_idx' : preds_idx,
         'accuracy': accuracy
     }
 
-def train_graph(graph, batch_size = batch_size, num_epochs = 20, iterator = PaddedDataIterator):
+def train_graph(graph, batch_size = batch_size, num_epochs = 50, iterator = PaddedDataIterator):
     with tf.Session() as sess:
-        sess.run(tf.initialize_all_variables())
-        tr = iterator(data_df)
-        # te = iterator(test)
+        sess.run(tf.global_variables_initializer())
+        # sess.run(tf.initialize_all_variables())
+        #Train Data
+        tr = iterator(data_train)
+        #Dev Data
+        dev = iterator(data_dev)
+        #Test Data
+        te = iterator(data_test)
 
         step, accuracy = 0, 0
-        tr_losses, te_losses = [], []
-        current_epoch = 0
+        tr_losses, dev_losses, te_losses = [], [], []
+	wupsscores = []
+	current_epoch = 0
+	curwups = []
         while current_epoch < num_epochs:
             step += 1
             batch = tr.next_batch(batch_size)
             feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
-            accuracy_, _ = sess.run([g['accuracy'], g['ts']], feed_dict=feed)
+            accuracy_, preds_idx_, _ = sess.run([g['accuracy'], g['preds_idx'], g['ts']], feed_dict=feed)
             accuracy += accuracy_
 
-            if tr.epochs > current_epoch:
+            idx = 0
+            
+	    for ent in batch[2]:
+            	pred_idx = preds_idx_[idx]
+            	actual_idx = ent
+            	idx += 1
+            	for word, word_idx in vocab.iteritems():
+            		if word_idx == pred_idx:
+            			pred_word = word
+            		if word_idx == actual_idx:
+            			actual_word = word
+            	wordFromList1 = wordnet.synsets(pred_word)
+            	wordFromList2 = wordnet.synsets(actual_word)
+            	if wordFromList1 and wordFromList2:
+            		s = wordFromList1[0].wup_similarity(wordFromList2[0])
+            		if(s != None):
+            			curwups.append(s)
+	    
+	    if tr.epochs > current_epoch:
                 current_epoch += 1
                 tr_losses.append(accuracy / step)
                 step, accuracy = 0, 0
+            	avgscore = sum(curwups)/len(curwups)
+		wupsscores.append(avgscore)
+		curwups =  []
+                # eval dev set
+                dev_epoch = dev.epochs
+                while dev.epochs == dev_epoch:
+                    step += 1
+                    batch = dev.next_batch(batch_size)
+                    feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
+                    accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
+                    accuracy += accuracy_
 
-                #eval test set
-                # te_epoch = te.epochs
-                # while te.epochs == te_epoch:
-                #     step += 1
-                #     batch = te.next_batch(batch_size)
-                #     feed = {g['x']: batch[0], g['y']: batch[1], g['seqlen']: batch[2]}
-                #     accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
-                #     accuracy += accuracy_
+                dev_losses.append(accuracy / step)
+                step, accuracy = 0,0
+                print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- dev:", dev_losses[-1])
 
-                # te_losses.append(accuracy / step)
-                # step, accuracy = 0,0
-                # print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- te:", te_losses[-1])
-                print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1])
-
-    return tr_losses, te_losses
-
-def test_graph(graph, batch_size = batch_size, num_epochs = 1, iterator = PaddedDataIterator):
-    with tf.Session() as sess:
-        sess.run(tf.initialize_all_variables())
-        tr = iterator(data_df)
-        # te = iterator(test)
-
-        step, accuracy = 0, 0
-        tr_losses, te_losses = [], []
-        current_epoch = 0
-        while current_epoch < num_epochs:
+        #Run on test data and get accuracy here
+        te_epoch = te.epochs
+        while te.epochs == te_epoch:
             step += 1
-            batch = tr.next_batch(batch_size)
+            batch = te.next_batch(batch_size)
             feed = {g['ques_placeholder']: batch[0], g['img_placeholder']: batch[1], g['ans_placeholder']: batch[2], g['ques_seqlen_placeholder']: batch[3]}
-            accuracy_, _ = sess.run([g['accuracy'], g['ts']], feed_dict=feed)
+            accuracy_ = sess.run([g['accuracy']], feed_dict=feed)[0]
             accuracy += accuracy_
-
-            if tr.epochs > current_epoch:
-                current_epoch += 1
-                tr_losses.append(accuracy / step)
-                step, accuracy = 0, 0
-
-                print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1])
-
-    return tr_losses, te_losses
-
+        te_losses.append(accuracy / step)
+        step, accuracy = 0,0
+    
+    return tr_losses, dev_losses, te_losses, wupsscores
 
 g = build_graph(batch_size=batch_size)
-tr_losses, te_losses = train_graph(g)
+tr_losses, dev_losses, te_losses, avg_scores = train_graph(g)
 loss = test_graph(g)
+np.savetxt('results/Baseline/traininglossp8.txt', np.array(tr_losses), delimiter='\n')
+np.savetxt('results/Baseline/devlossp8.txt', np.array(dev_losses), delimiter='\n')
+np.savetxt('results/Baseline/testlossp8.txt',np.array(te_losses), delimiter='\n')
+np.savetxt('results/Baseline/avgscoresexactp8.txt',np.array(avg_scores), delimiter='\n')
