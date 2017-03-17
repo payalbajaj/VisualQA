@@ -7,8 +7,9 @@ import glob
 BATCH_SIZE = 10
 
 
-filenames = glob.glob('/home/admin224N/VG_100K/*')
-print len(filenames)
+filenames = glob.glob('/home/admin224N/VG_100K_2/*')
+filenames = filenames[1590:]
+
 def print_visembed(nameimg, sumsecond, f):
 	strtoadd = nameimg + " " + " ".join(str(i) for i in sumsecond) + "\n"
 	f.write(strtoadd)  # python will convert \n to os.linesep
@@ -24,7 +25,7 @@ def imageget(startind, endind):
 	imgsnp = np.array(imgs)
 	return imgsnp
 
-f = open('/home/admin224N/data_VisualQA/cnn.txt', 'w')
+f = open('/home/admin224N/data_VisualQA/cnn2.txt', 'a')
 with tf.Session() as sess:
     size = len(filenames)
     for step in xrange(size / BATCH_SIZE):

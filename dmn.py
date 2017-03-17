@@ -138,7 +138,7 @@ img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size     #can be changed
 batch_size = 128
 N = 196
-T = 10
+T = 1
 
 def reset_graph():
     if 'sess' in globals() and sess:
@@ -154,7 +154,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
     img_placeholder = tf.placeholder(tf.int32, [batch_size])	
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
-    keep_prob = tf.constant(0.9)
+    keep_prob = tf.constant(0.8)
 
     # Embedding layer
     word_embeddings = tf.Variable(wordEmbeddings, dtype=tf.float32)
@@ -340,7 +340,7 @@ def train_graph(g, batch_size = batch_size, num_epochs = 50, iterator = PaddedDa
 
 g = build_graph(batch_size=batch_size)
 tr_losses, dev_losses, te_losses, avg_scores = train_graph(g)
-np.savetxt('./traininglossT10.txt', np.array(tr_losses), delimiter='\n')
-np.savetxt('./devlossT10.txt', np.array(dev_losses), delimiter='\n')
-np.savetxt('./testlossT10.txt',np.array(te_losses), delimiter='\n')
-np.savetxt('./avgscoresexactT10.txt',np.array(avg_scores), delimiter='\n')
+np.savetxt('./traininglossp8.txt', np.array(tr_losses), delimiter='\n')
+np.savetxt('./devlossp8.txt', np.array(dev_losses), delimiter='\n')
+np.savetxt('./testlossp8.txt',np.array(te_losses), delimiter='\n')
+np.savetxt('./avgscoresexactp8.txt',np.array(avg_scores), delimiter='\n')
