@@ -1,6 +1,6 @@
 import numpy as np
 
-DEFAULT_FILE_PATH = "../data_VisualQA/glove.6B.50d.txt"
+DEFAULT_FILE_PATH = "../data_VisualQA/glove.6B.100d.txt"
 
 def loadWordVectors(tokens, filepath=DEFAULT_FILE_PATH, dimensions=50):
     """Read pretrained GloVe vectors"""
