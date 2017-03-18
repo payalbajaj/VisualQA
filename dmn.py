@@ -46,11 +46,11 @@ class PaddedDataIterator(SimpleDataIterator):
 
 ########Read the data and create the data frame########
 data_path = "../data_VisualQA/question_answers.json"
-file_name = "../data_VisualQA/data_train.pkl"
-file_name2 = "../data_VisualQA/data_dev.pkl"
-file_name3 = "../data_VisualQA/data_test.pkl"
-vocab_mapping = "../data_VisualQA/vocab.pkl"
-img_mapping = "../data_VisualQA/img.pkl"
+file_name = "../data_VisualQA/data_trainFinal.pkl"
+file_name2 = "../data_VisualQA/data_devFinal.pkl"
+file_name3 = "../data_VisualQA/data_testFinal.pkl"
+vocab_mapping = "../data_VisualQA/vocabFinal.pkl"
+img_mapping = "../data_VisualQA/imgFinal.pkl"
 if(os.path.exists(file_name) and os.path.exists(file_name2) and os.path.exists(file_name3) and os.path.exists(vocab_mapping) and os.path.exists(img_mapping)):
 	data_train = pd.read_pickle(file_name)
 	data_dev = pd.read_pickle(file_name2)
@@ -76,7 +76,7 @@ else:
 	img_count = 0
 	###Read images for which embeddings are present and create data frame only for those images####
 	img_set = set()
-	f = open("../data_VisualQA/cnn.txt", "r")
+	f = open("../data_VisualQA/cnn2000.txt", "r")
 	for line in f:
 		img_id = line.split(" ")[0].split('/')[4].split('.')[0]
 		img_set.add(img_id)
@@ -128,7 +128,7 @@ else:
 	image_df.to_pickle(img_mapping)
 
 wordEmbeddings = loadWordVectors(vocab) #check if you need embedding for "UNK"
-imgEmbeddings = loadImgVectors(img_vocab)
+imgEmbeddings = loadImgVectors(img_vocab, filepath = "../data_VisualQA/cnn2000.txt")
 
 
 #########Building the Baseline Graph############
@@ -154,7 +154,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
     img_placeholder = tf.placeholder(tf.int32, [batch_size])	
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
-    keep_prob = tf.constant(0.8)
+    keep_prob = tf.constant(0.7)
 
     # Embedding layer
     word_embeddings = tf.Variable(wordEmbeddings, dtype=tf.float32)
@@ -264,7 +264,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-def train_graph(g, batch_size = batch_size, num_epochs = 256, iterator = PaddedDataIterator):
+def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         # sess.run(tf.initialize_all_variables())
