@@ -280,6 +280,7 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
 	wupsscores = []
 	current_epoch = 0
 	curwups = []
+	predact = []
         while current_epoch < num_epochs:
             step += 1
             batch = tr.next_batch(batch_size)
@@ -290,6 +291,7 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
             idx = 0
             
 	    for ent in batch[2]:
+		del predact[:]
             	pred_idx = preds_idx_[idx]
             	actual_idx = ent
             	idx += 1
@@ -300,11 +302,12 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
             			actual_word = word
             	wordFromList1 = wordnet.synsets(pred_word)
             	wordFromList2 = wordnet.synsets(actual_word)
-            	if wordFromList1 and wordFromList2:
+		if wordFromList1 and wordFromList2:
+			predact.append(pred_word,actual_word)
             		s = wordFromList1[0].wup_similarity(wordFromList2[0])
             		if(s != None):
             			curwups.append(s)
-	    
+	    print(len(predact))	    
 	    if tr.epochs > current_epoch:
                 current_epoch += 1
                 tr_losses.append(accuracy / step)
@@ -336,11 +339,12 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
         te_losses.append(accuracy / step)
         step, accuracy = 0,0
     
-    return tr_losses, dev_losses, te_losses, wupsscores
+    return tr_losses, dev_losses, te_losses, wupsscores, predact
 
 g = build_graph(batch_size=batch_size)
-tr_losses, dev_losses, te_losses, avg_scores = train_graph(g)
-np.savetxt('results/P8/trainingloss.txt', np.array(tr_losses), delimiter='\n')
-np.savetxt('results/P8/devloss.txt', np.array(dev_losses), delimiter='\n')
-np.savetxt('results/P8/testloss.txt',np.array(te_losses), delimiter='\n')
-np.savetxt('results/P8/avgWUPSscores.txt',np.array(avg_scores), delimiter='\n')
+tr_losses, dev_losses, te_losses, avg_scores, predact = train_graph(g)
+np.savetxt('results/Final/trainingloss.txt', np.array(tr_losses), delimiter='\n')
+np.savetxt('results/Final/devloss.txt', np.array(dev_losses), delimiter='\n')
+np.savetxt('results/Final/testloss.txt',np.array(te_losses), delimiter='\n')
+np.savetxt('results/Final/avgWUPSscores.txt',np.array(avg_scores), delimiter='\n')
+np.savetxt('results/Final/erroranalysis.txt',np.array(predact), delimiter='\n')
