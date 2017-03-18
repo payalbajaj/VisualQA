@@ -133,7 +133,7 @@ imgEmbeddings = loadImgVectors(img_vocab)
 
 #########Building the Baseline Graph############
 
-ques_embed_size = 50    #gllve vectors are 50 dimensional
+ques_embed_size = 200    #glove vectors are 50 dimensional
 img_embed_size = 512 #replace this by size of image embeddings
 hidden_state_size = ques_embed_size    #can be changed
 batch_size = 128
