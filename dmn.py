@@ -76,7 +76,7 @@ else:
 	img_count = 0
 	###Read images for which embeddings are present and create data frame only for those images####
 	img_set = set()
-	f = open("../data_VisualQA/cnn2000.txt", "r")
+	f = open("../data_VisualQA/cnn1500.txt", "r")
 	for line in f:
 		img_id = line.split(" ")[0].split('/')[4].split('.')[0]
 		img_set.add(img_id)
@@ -128,7 +128,7 @@ else:
 	image_df.to_pickle(img_mapping)
 
 wordEmbeddings = loadWordVectors(vocab) #check if you need embedding for "UNK"
-imgEmbeddings = loadImgVectors(img_vocab, filepath = "../data_VisualQA/cnn2000.txt")
+imgEmbeddings = loadImgVectors(img_vocab, filepath = "../data_VisualQA/cnn1500.txt")
 
 
 #########Building the Baseline Graph############
