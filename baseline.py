@@ -166,9 +166,9 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
 
     # RNN
     # tf 1.0
-    cell = tf.contrib.rnn.GRUCell(ques_embed_size, hidden_state_size)
+    # cell = tf.contrib.rnn.GRUCell(ques_embed_size, hidden_state_size)
     # tf < 1.0
-    #cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
+    cell = tf.nn.rnn_cell.GRUCell(ques_embed_size, hidden_state_size)
     init_state = tf.get_variable('init_state', [1, hidden_state_size], initializer=tf.constant_initializer(0.0), dtype=tf.float32)
     init_state = tf.tile(init_state, [batch_size, 1])
     rnn_outputs, final_state = tf.nn.dynamic_rnn(cell, rnn_word_inputs, sequence_length=ques_seqlen_placeholder, initial_state=init_state, dtype=tf.float32)
