@@ -133,9 +133,9 @@ imgEmbeddings = loadImgVectors(img_vocab)
 
 #########Building the Baseline Graph############
 
-ques_embed_size = 100    #gllve vectors are 50 dimensional
+ques_embed_size = 50    #gllve vectors are 50 dimensional
 img_embed_size = 512 #replace this by size of image embeddings
-hidden_state_size = 50     #can be changed
+hidden_state_size = ques_embed_size    #can be changed
 batch_size = 128
 N = 196
 T = 1
@@ -154,7 +154,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
     img_placeholder = tf.placeholder(tf.int32, [batch_size])	
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
-    keep_prob = tf.constant(0.9)
+    keep_prob = tf.constant(0.8)
 
     # Embedding layer
     word_embeddings = tf.Variable(wordEmbeddings, dtype=tf.float32)
@@ -264,7 +264,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-def train_graph(g, batch_size = batch_size, num_epochs = 50, iterator = PaddedDataIterator):
+def train_graph(g, batch_size = batch_size, num_epochs = 256, iterator = PaddedDataIterator):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         # sess.run(tf.initialize_all_variables())
@@ -340,7 +340,7 @@ def train_graph(g, batch_size = batch_size, num_epochs = 50, iterator = PaddedDa
 
 g = build_graph(batch_size=batch_size)
 tr_losses, dev_losses, te_losses, avg_scores = train_graph(g)
-np.savetxt('./trainingloss.txt', np.array(tr_losses), delimiter='\n')
-np.savetxt('./devloss.txt', np.array(dev_losses), delimiter='\n')
-np.savetxt('./testloss.txt',np.array(te_losses), delimiter='\n')
-np.savetxt('./avgWUPSscores.txt',np.array(avg_scores), delimiter='\n')
+np.savetxt('results/P8/trainingloss.txt', np.array(tr_losses), delimiter='\n')
+np.savetxt('results/P8/devloss.txt', np.array(dev_losses), delimiter='\n')
+np.savetxt('results/P8/testloss.txt',np.array(te_losses), delimiter='\n')
+np.savetxt('results/P8/avgWUPSscores.txt',np.array(avg_scores), delimiter='\n')

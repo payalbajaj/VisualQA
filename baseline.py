@@ -76,9 +76,10 @@ else:
 	img_count = 0
 	###Read images for which embeddings are present and create data frame only for those images####
 	img_set = set()
-	f = open("../data_VisualQA/cnn.txt", "r")
+	f = open("../data_VisualQA/baseline.txt", "r")
 	for line in f:
-		img_id = line.split(" ")[0].split('/')[4].split('.')[0]
+		img_id = line.split(" ")[0]
+		print(len(line.split(" ")))
 		img_set.add(img_id)
 	print len(img_set)
 	f.close()
@@ -153,7 +154,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
     ques_seqlen_placeholder = tf.placeholder(tf.int32, [batch_size])
     img_placeholder = tf.placeholder(tf.int32, [batch_size])
     ans_placeholder = tf.placeholder(tf.int32, [batch_size])
-    keep_prob = tf.constant(0.8)
+    keep_prob = tf.constant(0.9)
 
     # Embedding layer
     word_embeddings = tf.Variable(wordEmbeddings, dtype=tf.float32)
@@ -284,7 +285,7 @@ def train_graph(graph, batch_size = batch_size, num_epochs = 50, iterator = Padd
 g = build_graph(batch_size=batch_size)
 tr_losses, dev_losses, te_losses, avg_scores = train_graph(g)
 loss = test_graph(g)
-np.savetxt('results/Baseline/traininglossp8.txt', np.array(tr_losses), delimiter='\n')
-np.savetxt('results/Baseline/devlossp8.txt', np.array(dev_losses), delimiter='\n')
-np.savetxt('results/Baseline/testlossp8.txt',np.array(te_losses), delimiter='\n')
-np.savetxt('results/Baseline/avgscoresexactp8.txt',np.array(avg_scores), delimiter='\n')
+np.savetxt('results/Baseline/trainingloss.txt', np.array(tr_losses), delimiter='\n')
+np.savetxt('results/Baseline/devloss.txt', np.array(dev_losses), delimiter='\n')
+np.savetxt('results/Baseline/testloss.txt',np.array(te_losses), delimiter='\n')
+np.savetxt('results/Baseline/WUPS.txt',np.array(avg_scores), delimiter='\n')
