@@ -264,7 +264,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedDataIterator):
+def train_graph(g, batch_size = batch_size, num_epochs = 50, iterator = PaddedDataIterator):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         # sess.run(tf.initialize_all_variables())
@@ -291,7 +291,6 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
             idx = 0
             
 	    for ent in batch[2]:
-		del predact[:]
             	pred_idx = preds_idx_[idx]
             	actual_idx = ent
             	idx += 1
@@ -303,11 +302,10 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
             	wordFromList1 = wordnet.synsets(pred_word)
             	wordFromList2 = wordnet.synsets(actual_word)
 		if wordFromList1 and wordFromList2:
-			predact.append(pred_word,actual_word)
+			predact.append('predicted: ' + pred_word + ' , actual: ' + actual_word)
             		s = wordFromList1[0].wup_similarity(wordFromList2[0])
             		if(s != None):
             			curwups.append(s)
-	    print(len(predact))	    
 	    if tr.epochs > current_epoch:
                 current_epoch += 1
                 tr_losses.append(accuracy / step)
@@ -327,6 +325,8 @@ def train_graph(g, batch_size = batch_size, num_epochs = 100, iterator = PaddedD
                 dev_losses.append(accuracy / step)
                 step, accuracy = 0,0
                 print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- dev:", dev_losses[-1])
+		if current_epoch != 2:
+			del predact[:]
 
         #Run on test data and get accuracy here
         te_epoch = te.epochs
@@ -347,4 +347,4 @@ np.savetxt('results/Final/trainingloss.txt', np.array(tr_losses), delimiter='\n'
 np.savetxt('results/Final/devloss.txt', np.array(dev_losses), delimiter='\n')
 np.savetxt('results/Final/testloss.txt',np.array(te_losses), delimiter='\n')
 np.savetxt('results/Final/avgWUPSscores.txt',np.array(avg_scores), delimiter='\n')
-np.savetxt('results/Final/erroranalysis.txt',np.array(predact), delimiter='\n')
+np.savetxt('results/Final/erroranalysis.txt',np.array(predact), delimiter='\n', fmt = '%s')
