@@ -264,7 +264,7 @@ def build_graph(batch_size, num_classes=len(vocab)):    #num_classes should be e
         'accuracy': accuracy
     }
 
-def train_graph(g, batch_size = batch_size, num_epochs = 50, iterator = PaddedDataIterator):
+def train_graph(g, batch_size = batch_size, num_epochs = 256, iterator = PaddedDataIterator):
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         # sess.run(tf.initialize_all_variables())
@@ -325,7 +325,7 @@ def train_graph(g, batch_size = batch_size, num_epochs = 50, iterator = PaddedDa
                 dev_losses.append(accuracy / step)
                 step, accuracy = 0,0
                 print("Accuracy after epoch", current_epoch, " - tr:", tr_losses[-1], "- dev:", dev_losses[-1])
-		if current_epoch != 2:
+		if current_epoch != 256:
 			del predact[:]
 
         #Run on test data and get accuracy here
